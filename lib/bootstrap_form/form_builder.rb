@@ -4,7 +4,7 @@ module BootstrapForm
   class FormBuilder < ActionView::Helpers::FormBuilder
     include BootstrapForm::Helpers::Bootstrap
 
-    attr_reader :layout, :label_col, :control_col, :has_error, :inline_errors, :label_errors, :acts_like_form_tag
+    attr_reader :layout, :label_col, :control_col, :has_error, :inline_errors, :label_errors, :full_error_messages, :help_tag, :acts_like_form_tag
 
     FIELD_HELPERS = %w{color_field date_field datetime_field datetime_local_field
       email_field month_field number_field password_field phone_field
@@ -20,6 +20,8 @@ module BootstrapForm
       @label_col = options[:label_col] || default_label_col
       @control_col = options[:control_col] || default_control_col
       @label_errors = options[:label_errors] || false
+      @full_error_messages = options[:full_error_messages] || false
+      @help_tag = options[:help_tag] || :span
       @inline_errors = if options[:inline_errors].nil?
         @label_errors != true
       else
@@ -207,6 +209,7 @@ module BootstrapForm
       fields_options[:control_col] ||= options[:control_col]
       fields_options[:inline_errors] ||= options[:inline_errors]
       fields_options[:label_errors] ||= options[:label_errors]
+      fields_options[:full_error_messages] ||= options[:full_error_messages]
       fields_for_without_bootstrap(record_name, record_object, fields_options, &block)
     end
 
@@ -356,13 +359,16 @@ module BootstrapForm
 
     end
 
-    def generate_help(name, help_text)
-      help_text = get_error_messages(name) if has_error?(name) && inline_errors
-      return if help_text === false
+    def generate_help(name, help_texts)
+      help_texts = get_error_messages(name) if has_error?(name) && inline_errors
+      return if help_texts === false
 
-      help_text ||= get_help_text_by_i18n_key(name)
+      help_texts ||= get_help_text_by_i18n_key(name)
 
-      content_tag(:span, help_text, class: 'help-block') if help_text.present?
+      Array.wrap(help_texts)
+        .map { |help_text| content_tag(help_tag, "#{help_text}.", class: 'help-block') }
+        .join
+        .html_safe
     end
 
     def generate_icon(icon)
@@ -370,7 +376,11 @@ module BootstrapForm
     end
 
     def get_error_messages(name)
-      object.errors[name].join(", ")
+      if full_error_messages
+        object.errors.full_messages_for(name)
+      else
+        object.errors[name].join(", ")
+      end
     end
 
     def inputs_collection(name, collection, value, text, options = {}, &block)
